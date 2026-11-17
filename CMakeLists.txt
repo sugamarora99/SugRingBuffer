@@ -5,7 +5,7 @@ option(SUG_BUILD_TESTS "Build the test suite" ON)
 option(SUG_BUILD_BENCHMARKS "Build benchmark programs" ON)
 set(SUG_SANITIZE "" CACHE STRING "Sanitizer to build with: '' (none), 'thread', or 'address,undefined'")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
