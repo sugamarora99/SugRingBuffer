@@ -74,8 +74,8 @@ namespace SugRingBuffer {
         private:
             std::vector<std::optional<T>> buffer;
             size_t capacity_;
-            std::atomic<int> writeIdx_{0};
-            std::atomic<int> readIdx_{0};
+            std::atomic<size_t> writeIdx_{0};
+            std::atomic<size_t> readIdx_{0};
     };
 
 
