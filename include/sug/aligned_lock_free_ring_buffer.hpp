@@ -5,6 +5,7 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
+#include "spsc_interface.hpp"
 
 namespace SugRingBuffer {
 
@@ -19,7 +20,7 @@ namespace SugRingBuffer {
 
     */
     template<typename T>
-    class AlignedSPSC {
+    class AlignedSPSC : public SPSCInterface<T> {
         public:
             AlignedSPSC() = delete;
 
@@ -38,7 +39,7 @@ namespace SugRingBuffer {
                 buffer = std::make_unique<T[]>(capacity);
             }
 
-            bool push(const T& item){
+            bool push(const T& item) override{
                 if(full()){
                     return false;
                 }
@@ -49,7 +50,7 @@ namespace SugRingBuffer {
                 return true;
             }
 
-            bool pop(T& item){
+            bool pop(T& item) override{
                 if(empty()){
                     return false;
                 }
@@ -60,7 +61,7 @@ namespace SugRingBuffer {
                 return true;
             }
 
-            [[nodiscard]] bool full() const {
+            [[nodiscard]] bool full() const override {
                 // producer thread will be only thread that calls this
                 if(((writeIdx_.load(std::memory_order_relaxed) + 1) & (capacity_ - 1)) == readIdx_.load(std::memory_order_acquire)){
                     return true;
@@ -70,7 +71,7 @@ namespace SugRingBuffer {
                 
             }
 
-            [[nodiscard]] bool empty() const {
+            [[nodiscard]] bool empty() const override{
                 // consumer thread will be only thread that calls this
                 if(readIdx_.load(std::memory_order_relaxed) == writeIdx_.load(std::memory_order_acquire)){
                     return true;
@@ -79,7 +80,7 @@ namespace SugRingBuffer {
                 }
             }
 
-            [[nodiscard]] size_t size() const {
+            [[nodiscard]] size_t size() const override {
                 return size_.load(std::memory_order_relaxed);
             }
 
