@@ -103,7 +103,7 @@ Hardware: Raspberry Pi 5 (4× Cortex-A76, private L1/L2, shared L3),
 1. **The instruction count, not cache alignment, drives the gap.** The optimized
    implementation executes ~0.93B instructions vs ~1.65B for the naive one — a
    1.79× difference from the `%`→`&` and `optional`→raw-array changes. This
-   accounts for essentially the entire ~34% time difference.
+   accounts for essentially the entire ~38% time difference.
 
 2. **`cache-misses` does not reveal false sharing.** The generic counter
    measures *local* cache misses, not coherence/invalidation traffic. The
@@ -136,6 +136,14 @@ Isolates false sharing by making the two implementations identical except for
 Aligned is ~1.26x faster (~26%), or ~21.5 ns/item — the pure false-sharing cost,
 since the implementations differ only by `alignas`.
 
+### CPU counters
+
+| Counter | Aligned | Nonaligned |
+|---|---|---|
+| instructions | 974,899,591 | 1,061,278,756 |
+| cycles | 3,819,297,993 | 4,864,401,550 |
+| insn/cycle (IPC) | 0.26 | 0.22 |
+
 ### Coherence counters
 
 | Counter | Aligned | Nonaligned |
@@ -160,7 +168,7 @@ is a single cluster.)
 ### Findings
 
 1. **Avoiding false sharing recovers ~26% throughput** on this hardware. The
-   effect is real but smaller than the ~34% gap in Experiment 1, which was
+   effect is real but smaller than the ~38% gap in Experiment 1, which was
    dominated by instruction-count differences.
 
 2. **False sharing costs latency, not coherence traffic.** The
@@ -179,3 +187,29 @@ is a single cluster.)
    a store miss without refilling it (the whole line is about to be
    overwritten), so store misses appear at L1 (write-allocate) but not as L2
    refills.
+
+5. **The instruction count is not identical, despite identical source.** The
+   nonaligned version executes ~8.9% more instructions (1.06B vs 0.97B):
+   false-sharing stalls slow each `push`/`pop`, so the threads spend longer in
+   the `while (!push/pop())` busy-wait loops. Its lower IPC (0.22 vs 0.26) is
+   the same stall seen per-instruction. This is the *opposite* direction of
+   Experiment 1, where the naive version's extra ALU instructions inflated its
+   IPC (0.31 vs 0.24) and hid the effect.
+
+## Overall Conclusions
+1. **Algorithmic optimizations dominate.** The largest win (~38%, Experiment 1)
+   came from reducing instruction count (`%`→`&`, `optional`→raw array), not from
+   cache alignment.
+
+2. **Cache-line alignment is a real but secondary win.** Isolated in Experiment 2,
+   avoiding false sharing recovers ~26% throughput on this hardware.
+
+3. **True sharing is the hidden cost to watch for.** The redundant `size_` counter
+   (written by both threads) was worse than false sharing — it serialized the
+   producer and consumer and reversed the results until removed. No amount of
+   `alignas` can fix a variable two threads write.
+
+4. **False sharing is latency, not volume.** It doesn't add much to the *total*
+   cache-miss count; it shifts the misses toward stores (line contention) and
+   costs stall time.
+
