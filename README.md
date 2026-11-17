@@ -126,10 +126,56 @@ Isolates false sharing by making the two implementations identical except for
 `size_t` indices as `AlignedSPSC`. The only remaining difference is whether
 `readIdx_`/`writeIdx_` share a cache line.
 
-### Results
+### Throughput
 
-*To be filled in after re-running the benchmark.*
+| Implementation | Time | Throughput |
+|---|---|---|
+| `AlignedSPSC` | 0.829s | **12.07M items/s** |
+| `SPSC` | 1.044s | 9.58M items/s |
+
+Aligned is ~1.26x faster (~26%), or ~21.5 ns/item — the pure false-sharing cost,
+since the implementations differ only by `alignas`.
+
+### Coherence counters
+
+| Counter | Aligned | Nonaligned |
+|---|---|---|
+| l2d_cache_inval | 43,362,384 | 42,005,136 |
+| l2d_cache_refill | 42,495,081 | 40,784,385 |
+| l2d_cache_wb_clean | 43,369,874 | 41,993,274 |
+| bus_access | 347,018,833 | 335,992,525 |
+
+(`remote_access` is 0 for both — it counts cross-cluster traffic, and the Pi 5
+is a single cluster.)
+
+### L1/L2 refills (load vs store misses)
+
+| Counter | Aligned | Nonaligned |
+|---|---|---|
+| l1d_cache_refill_rd (L1 load misses) | 21,877,725 | 14,485,941 |
+| l1d_cache_refill_wr (L1 store misses) | 22,931,137 | 27,739,407 |
+| l2d_cache_refill_rd (L2 load misses) | 44,814,421 | 41,263,590 |
+| l2d_cache_refill_wr (L2 store misses) | 0 | 0 |
 
 ### Findings
 
-*To be filled in.*
+1. **Avoiding false sharing recovers ~26% throughput** on this hardware. The
+   effect is real but smaller than the ~34% gap in Experiment 1, which was
+   dominated by instruction-count differences.
+
+2. **False sharing costs latency, not coherence traffic.** The
+   invalidation/refill/write-back counts are essentially equal for both
+   versions, yet aligned is ~26% faster. The penalty appears as stall time,
+   not as extra cache operations.
+
+3. **False sharing shows up as store misses.** Nonaligned has ~21% more L1
+   store misses (27.7M vs 22.9M): because `writeIdx_` and `readIdx_` share one
+   line, each index store invalidates the other core's copy and the next store
+   misses, ping-ponging the line between cores. Load misses shift the other
+   way (aligned higher) as a secondary effect, so the *total* miss count is
+   nearly equal — only the *kind* of miss changes.
+
+4. `l2d_cache_refill_wr = 0` for both: a write-back cache allocates a line on
+   a store miss without refilling it (the whole line is about to be
+   overwritten), so store misses appear at L1 (write-allocate) but not as L2
+   refills.
