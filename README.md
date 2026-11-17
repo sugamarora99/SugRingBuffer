@@ -140,9 +140,7 @@ since the implementations differ only by `alignas`.
 
 | Counter | Aligned | Nonaligned |
 |---|---|---|
-| instructions | 974,899,591 | 1,061,278,756 |
 | cycles | 3,819,297,993 | 4,864,401,550 |
-| insn/cycle (IPC) | 0.26 | 0.22 |
 
 ### Coherence counters
 
@@ -187,14 +185,6 @@ is a single cluster.)
    a store miss without refilling it (the whole line is about to be
    overwritten), so store misses appear at L1 (write-allocate) but not as L2
    refills.
-
-5. **The instruction count is not identical, despite identical source.** The
-   nonaligned version executes ~8.9% more instructions (1.06B vs 0.97B):
-   false-sharing stalls slow each `push`/`pop`, so the threads spend longer in
-   the `while (!push/pop())` busy-wait loops. Its lower IPC (0.22 vs 0.26) is
-   the same stall seen per-instruction. This is the *opposite* direction of
-   Experiment 1, where the naive version's extra ALU instructions inflated its
-   IPC (0.31 vs 0.24) and hid the effect.
 
 ## Overall Conclusions
 1. **Algorithmic optimizations dominate.** The largest win (~38%, Experiment 1)
