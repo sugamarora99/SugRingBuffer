@@ -46,7 +46,6 @@ namespace SugRingBuffer {
                 int currentIdx = writeIdx_.load(std::memory_order_relaxed);
                 buffer[currentIdx] = item;
                 writeIdx_.store((currentIdx+1) & (capacity_ - 1), std::memory_order_release);
-                size_.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
 
@@ -57,7 +56,6 @@ namespace SugRingBuffer {
                 int currentIdx = readIdx_.load(std::memory_order_relaxed);
                 item = buffer[currentIdx];
                 readIdx_.store((currentIdx+1) & (capacity_ - 1), std::memory_order_release);
-                size_.fetch_sub(1, std::memory_order_relaxed);
                 return true;
             }
 
@@ -81,13 +79,16 @@ namespace SugRingBuffer {
             }
 
             [[nodiscard]] size_t size() const override {
-                return size_.load(std::memory_order_relaxed);
+                const size_t w = writeIdx_.load(std::memory_order_relaxed);
+                const size_t r = readIdx_.load(std::memory_order_relaxed);
+
+                // unsigned int wrap around is 2^64, so we can use bitmask since capacity_ is a power of 2
+                return (w - r) & (capacity_ - 1);
             }
 
         private:
             size_t capacity_;
             std::unique_ptr<T[]> buffer;
-            std::atomic<size_t> size_{0};
             
             alignas(std::hardware_destructive_interference_size)
             std::atomic<size_t> readIdx_{0};

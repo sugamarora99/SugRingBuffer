@@ -32,7 +32,6 @@ namespace SugRingBuffer {
                 int currentIdx = writeIdx_.load(std::memory_order_relaxed);
                 buffer[currentIdx] = item;
                 writeIdx_.store((currentIdx+1) % capacity_, std::memory_order_release);
-                size_.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
 
@@ -43,7 +42,6 @@ namespace SugRingBuffer {
                 int currentIdx = readIdx_.load(std::memory_order_relaxed);
                 item = buffer[currentIdx].value();
                 readIdx_.store((currentIdx+1) % capacity_, std::memory_order_release);
-                size_.fetch_sub(1, std::memory_order_relaxed);
                 return true;
             }
 
@@ -67,13 +65,15 @@ namespace SugRingBuffer {
             }
 
             [[nodiscard]] size_t size() const override {
-                return size_.load(std::memory_order_relaxed);
+                // no thread ever relies on size(), so putting memory barriers around access don't have any benefit.
+                const size_t w = writeIdx_.load(std::memory_order_relaxed);
+                const size_t r = readIdx_.load(std::memory_order_relaxed);
+                return (w + capacity_ - r) % capacity_;
             }
 
         private:
             std::vector<std::optional<T>> buffer;
             size_t capacity_;
-            std::atomic<size_t> size_{0};   // no thread ever relies on size(), so putting memory barriers around access don't have any benefit.
             std::atomic<int> writeIdx_{0};
             std::atomic<int> readIdx_{0};
     };
